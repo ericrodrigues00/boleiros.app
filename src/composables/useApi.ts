@@ -63,6 +63,7 @@ export function useApi() {
     },
     admin: {
       members: (token: string) => callFunction('admin', { body: { action: 'members' }, token }),
+      memberPicks: (token: string) => callFunction('admin', { body: { action: 'member-picks' }, token }),
       removeMember: (token: string, memberId: string) =>
         callFunction('admin', { body: { action: 'remove-member', memberId }, token }),
     },

@@ -26,6 +26,82 @@ Deno.serve(async (req) => {
       return json({ members: members ?? [] })
     }
 
+    if (action === 'member-picks') {
+      const { data: members } = await supabase
+        .from('pool_members')
+        .select('id, username')
+        .eq('pool_id', auth.poolId)
+
+      if (!members || members.length === 0) return json({ picks: [] })
+
+      const memberIds = members.map((m) => m.id)
+
+      const [{ data: groupBets }, { data: thirdBets }, { data: teams }, { data: groups }] =
+        await Promise.all([
+          supabase
+            .from('group_bets')
+            .select('member_id, group_id, predicted_first, predicted_second')
+            .in('member_id', memberIds),
+          supabase
+            .from('best_third_bets')
+            .select('member_id, team_id')
+            .in('member_id', memberIds),
+          supabase.from('teams').select('id, name, flag_code, group_id'),
+          supabase.from('wc_groups').select('id, name, sort_order').order('sort_order'),
+        ])
+
+      const teamMap = new Map((teams ?? []).map((t) => [t.id, t]))
+      const groupMap = new Map((groups ?? []).map((g) => [g.id, g]))
+
+      type MemberPick = {
+        memberId: string
+        username: string
+        groupBets: { group: string; sortOrder: number; first: string; firstFlag: string; second: string; secondFlag: string }[]
+        bestThirds: { team: string; flag: string; group: string }[]
+      }
+
+      const picksMap = new Map<string, MemberPick>()
+
+      for (const m of members) {
+        picksMap.set(m.id, { memberId: m.id, username: m.username, groupBets: [], bestThirds: [] })
+      }
+
+      for (const bet of groupBets ?? []) {
+        const entry = picksMap.get(bet.member_id)
+        if (!entry) continue
+        const grp = groupMap.get(bet.group_id)
+        const first = teamMap.get(bet.predicted_first)
+        const second = teamMap.get(bet.predicted_second)
+        entry.groupBets.push({
+          group: grp?.name ?? '?',
+          sortOrder: grp?.sort_order ?? 0,
+          first: first?.name ?? '?',
+          firstFlag: first?.flag_code ?? '',
+          second: second?.name ?? '?',
+          secondFlag: second?.flag_code ?? '',
+        })
+      }
+
+      for (const bet of thirdBets ?? []) {
+        const entry = picksMap.get(bet.member_id)
+        if (!entry) continue
+        const team = teamMap.get(bet.team_id)
+        const grp = team ? groupMap.get(team.group_id) : null
+        entry.bestThirds.push({
+          team: team?.name ?? '?',
+          flag: team?.flag_code ?? '',
+          group: grp?.name ?? '?',
+        })
+      }
+
+      for (const entry of picksMap.values()) {
+        entry.groupBets.sort((a, b) => a.sortOrder - b.sortOrder)
+        entry.bestThirds.sort((a, b) => a.group.localeCompare(b.group))
+      }
+
+      return json({ picks: Array.from(picksMap.values()) })
+    }
+
     if (action === 'remove-member') {
       const { memberId } = body
       if (!memberId) return error('memberId é obrigatório')
