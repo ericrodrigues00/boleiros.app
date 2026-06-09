@@ -9,7 +9,8 @@ const auth = useAuthStore()
 const api = useApi()
 
 const name = ref('')
-const password = ref('')
+const poolPassword = ref('')
+const memberPassword = ref('')
 const username = ref('')
 const topScorerPick = ref('')
 const loading = ref(false)
@@ -22,7 +23,8 @@ async function submit() {
   try {
     const { pool, member, token } = await api.pools.create({
       name: name.value,
-      password: password.value,
+      poolPassword: poolPassword.value,
+      memberPassword: memberPassword.value,
       username: username.value,
       topScorerPick: topScorerPick.value,
     })
@@ -58,7 +60,11 @@ function enterPool() {
         </div>
         <div class="field">
           <label class="label">Senha do bolão</label>
-          <input v-model="password" class="input" type="password" placeholder="Senha que todos usarão" required minlength="4" />
+          <input v-model="poolPassword" class="input" type="password" placeholder="Senha de convite compartilhada" required minlength="4" />
+        </div>
+        <div class="field">
+          <label class="label">Sua senha pessoal</label>
+          <input v-model="memberPassword" class="input" type="password" placeholder="Usada só para entrar na sua conta" required minlength="6" />
         </div>
         <div class="field">
           <label class="label">Seu username</label>

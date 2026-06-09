@@ -1,5 +1,5 @@
 import { handleCors, json, error } from '../_shared/cors.ts'
-import { verifyPassword, signToken } from '../_shared/crypto.ts'
+import { hashPassword, verifyPassword, signToken } from '../_shared/crypto.ts'
 import { getAuthSecret, getServiceClient } from '../_shared/supabase.ts'
 import { getMember } from '../_shared/auth.ts'
 
@@ -24,13 +24,14 @@ Deno.serve(async (req) => {
     const secret = getAuthSecret()
 
     if (action === 'register') {
-      const { inviteToken, username, password, topScorerPick } = body
-      if (!inviteToken || !username || !password || !topScorerPick?.trim()) {
-        return error('Token, username, senha do bolão e artilheiro são obrigatórios')
+      const { inviteToken, username, poolPassword, memberPassword, topScorerPick } = body
+      if (!inviteToken || !username || !poolPassword || !memberPassword || !topScorerPick?.trim()) {
+        return error('Token, username, senha do bolão, senha pessoal e artilheiro são obrigatórios')
       }
       const usernameErr = validateUsername(username)
       if (usernameErr) return error(usernameErr)
-      if (password.length < 4) return error('Senha do bolão deve ter pelo menos 4 caracteres')
+      if (poolPassword.length < 4) return error('Senha do bolão deve ter pelo menos 4 caracteres')
+      if (memberPassword.length < 6) return error('Senha pessoal deve ter pelo menos 6 caracteres')
 
       const { data: pool, error: poolError } = await supabase
         .from('pools')
@@ -40,14 +41,16 @@ Deno.serve(async (req) => {
 
       if (poolError || !pool) return error('Bolão não encontrado', 404)
 
-      const valid = await verifyPassword(password, pool.pool_password_hash)
+      const valid = await verifyPassword(poolPassword, pool.pool_password_hash)
       if (!valid) return error('Senha do bolão incorreta', 401)
 
+      const memberPasswordHash = await hashPassword(memberPassword)
       const { data: member, error: memberError } = await supabase
         .from('pool_members')
         .insert({
           pool_id: pool.id,
           username: username.toLowerCase(),
+          member_password_hash: memberPasswordHash,
           role: 'member',
           top_scorer_pick: topScorerPick.trim(),
         })
@@ -71,30 +74,33 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'login') {
-      const { inviteToken, username, password } = body
-      if (!inviteToken || !username || !password) {
-        return error('Token, username e senha são obrigatórios')
+      const { inviteToken, username, memberPassword } = body
+      if (!inviteToken || !username || !memberPassword) {
+        return error('Token, username e senha pessoal são obrigatórios')
       }
 
       const { data: pool, error: poolError } = await supabase
         .from('pools')
-        .select('id, pool_password_hash')
+        .select('id')
         .eq('invite_token', inviteToken)
         .single()
 
       if (poolError || !pool) return error('Bolão não encontrado', 404)
 
-      const valid = await verifyPassword(password, pool.pool_password_hash)
-      if (!valid) return error('Senha do bolão incorreta', 401)
-
       const { data: member, error: memberError } = await supabase
         .from('pool_members')
-        .select('id, pool_id, username, role, top_scorer_pick, joined_at')
+        .select('id, pool_id, username, role, top_scorer_pick, member_password_hash, joined_at')
         .eq('pool_id', pool.id)
         .eq('username', username.toLowerCase())
         .single()
 
       if (memberError || !member) return error('Usuário não encontrado neste bolão', 401)
+      if (!member.member_password_hash) {
+        return error('Esta conta ainda não tem senha pessoal. Crie uma nova conta ou peça ao admin para remover seu usuário antigo.', 401)
+      }
+
+      const valid = await verifyPassword(memberPassword, member.member_password_hash)
+      if (!valid) return error('Senha pessoal incorreta', 401)
 
       const token = await signToken({
         type: 'member',

@@ -15,7 +15,8 @@ const token = computed(() => route.params.token as string)
 const pool = ref<Pool | null>(null)
 const tab = ref<'login' | 'register'>('login')
 const username = ref('')
-const password = ref('')
+const poolPassword = ref('')
+const memberPassword = ref('')
 const topScorerPick = ref('')
 const loading = ref(false)
 const error = ref('')
@@ -40,7 +41,7 @@ async function login() {
     const { member, token: jwt } = await api.auth.login({
       inviteToken: token.value,
       username: username.value,
-      password: password.value,
+      memberPassword: memberPassword.value,
     })
     auth.setSession(jwt, member, token.value)
     router.push(`/b/${token.value}/grupos`)
@@ -58,7 +59,8 @@ async function register() {
     const { member, token: jwt } = await api.auth.register({
       inviteToken: token.value,
       username: username.value,
-      password: password.value,
+      poolPassword: poolPassword.value,
+      memberPassword: memberPassword.value,
       topScorerPick: topScorerPick.value,
     })
     auth.setSession(jwt, member, token.value)
@@ -103,8 +105,12 @@ const inviteUrl = computed(() => `${window.location.origin}/b/${token.value}`)
             <input v-model="username" class="input" placeholder="seu_nome" required minlength="3" />
           </div>
           <div class="field">
+            <label class="label">Senha pessoal</label>
+            <input v-model="memberPassword" class="input" type="password" required minlength="6" />
+          </div>
+          <div class="field" v-if="tab === 'register'">
             <label class="label">Senha do bolão</label>
-            <input v-model="password" class="input" type="password" required minlength="4" />
+            <input v-model="poolPassword" class="input" type="password" required minlength="4" />
           </div>
           <div class="field" v-if="tab === 'register'">
             <label class="label">Artilheiro da Copa</label>

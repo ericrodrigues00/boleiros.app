@@ -24,15 +24,18 @@ Deno.serve(async (req) => {
     const secret = getAuthSecret()
 
     if (action === 'create') {
-      const { name, password, username, topScorerPick } = body
+      const { name, poolPassword, memberPassword, password, username, topScorerPick } = body
+      const resolvedPoolPassword = poolPassword ?? password
       if (!name?.trim()) return error('Nome do bolão é obrigatório')
-      if (!password || password.length < 4) return error('Senha do bolão deve ter pelo menos 4 caracteres')
+      if (!resolvedPoolPassword || resolvedPoolPassword.length < 4) return error('Senha do bolão deve ter pelo menos 4 caracteres')
+      if (!memberPassword || memberPassword.length < 6) return error('Senha pessoal deve ter pelo menos 6 caracteres')
       const usernameErr = validateUsername(username)
       if (usernameErr) return error(usernameErr)
       if (!topScorerPick?.trim()) return error('Artilheiro é obrigatório')
 
       const inviteToken = generateInviteToken()
-      const passwordHash = await hashPassword(password)
+      const passwordHash = await hashPassword(resolvedPoolPassword)
+      const memberPasswordHash = await hashPassword(memberPassword)
 
       const { data: pool, error: poolError } = await supabase
         .from('pools')
@@ -51,6 +54,7 @@ Deno.serve(async (req) => {
         .insert({
           pool_id: pool.id,
           username: username.toLowerCase(),
+          member_password_hash: memberPasswordHash,
           role: 'admin',
           top_scorer_pick: topScorerPick.trim(),
         })

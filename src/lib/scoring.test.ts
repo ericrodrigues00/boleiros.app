@@ -37,8 +37,8 @@ describe('isMatchLocked', () => {
 describe('sortRankings', () => {
   it('sorts by points then exact scores then top scorer', () => {
     const sorted = sortRankings([
-      { pool_id: 'p', member_id: '1', username: 'b', total_points: 10, group_points: 0, best_third_points: 0, match_points: 10, exact_score_count: 1, top_scorer_correct: false },
-      { pool_id: 'p', member_id: '2', username: 'a', total_points: 10, group_points: 0, best_third_points: 0, match_points: 10, exact_score_count: 2, top_scorer_correct: false },
+      { pool_id: 'p', member_id: '1', username: 'b', top_scorer_pick: 'Jogador B', total_points: 10, group_points: 0, best_third_points: 0, match_points: 10, exact_score_count: 1, top_scorer_correct: false },
+      { pool_id: 'p', member_id: '2', username: 'a', top_scorer_pick: 'Jogador A', total_points: 10, group_points: 0, best_third_points: 0, match_points: 10, exact_score_count: 2, top_scorer_correct: false },
     ])
     expect(sorted[0].member_id).toBe('2')
   })

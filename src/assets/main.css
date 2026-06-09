@@ -476,6 +476,102 @@ button, input, select {
 .score-input:disabled { opacity: 0.5; }
 
 /* Ranking */
+.ranking-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.ranking-rules-btn {
+  white-space: nowrap;
+}
+
+.ranking-rules {
+  margin-bottom: 1.5rem;
+}
+
+.ranking-rules h2 {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+}
+
+.ranking-rules__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.85rem;
+}
+
+.ranking-rules__grid article {
+  padding: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.ranking-rules__grid strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--accent);
+}
+
+.ranking-rules__grid p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.rules-enter-active,
+.rules-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.rules-enter-from,
+.rules-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.ranking-shell {
+  padding: 0;
+  overflow: hidden;
+}
+
+.ranking-leader {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(200, 245, 66, 0.06);
+}
+
+.ranking-leader__eyebrow {
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(232, 196, 104, 0.15);
+  color: var(--gold);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ranking-leader strong {
+  font-family: var(--font-display);
+}
+
+.ranking-leader > span:last-child {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.ranking-empty {
+  color: var(--text-muted);
+  text-align: center;
+}
+
 .ranking-table {
   width: 100%;
   border-collapse: collapse;
@@ -496,6 +592,11 @@ button, input, select {
   font-weight: 500;
 }
 
+.th-help {
+  cursor: help;
+  border-bottom: 1px dotted rgba(139, 156, 179, 0.7);
+}
+
 .ranking-table tr.me {
   background: rgba(200, 245, 66, 0.06);
 }
@@ -513,10 +614,58 @@ button, input, select {
 
 .rank-pos.top { color: var(--gold); }
 
+.ranking-player {
+  min-width: 10rem;
+}
+
+.ranking-player strong {
+  font-weight: 700;
+}
+
+.ranking-player span {
+  display: inline-block;
+  margin-left: 0.5rem;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .points-cell {
   font-family: var(--font-display);
   font-weight: 700;
   color: var(--accent);
+}
+
+.top-scorer-pick {
+  display: inline-flex;
+  max-width: 11rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.top-scorer-pick.correct {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .ranking-hero {
+    flex-direction: column;
+  }
+
+  .ranking-rules-btn {
+    width: 100%;
+  }
+
+  .ranking-shell {
+    overflow-x: auto;
+  }
+
+  .ranking-table {
+    min-width: 760px;
+  }
 }
 
 /* Landing */

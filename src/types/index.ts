@@ -76,6 +76,7 @@ export interface RankingEntry {
   pool_id: string
   member_id: string
   username: string
+  top_scorer_pick: string
   total_points: number
   group_points: number
   best_third_points: number

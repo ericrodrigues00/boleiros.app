@@ -5,7 +5,7 @@ Bolão da Copa 2026 entre amigos — Vue 3 + Supabase.
 ## Features
 
 - Múltiplos bolões com link de convite
-- Auth por bolão (username + senha compartilhada)
+- Auth por bolão com username + senha pessoal; a senha compartilhada do bolão só libera o cadastro inicial
 - Fase de grupos: 1º/2º de cada grupo + 8 melhores terceiros
 - Mata-mata: palpites até 10 min antes do jogo
 - Ranking com desempate (exatos → artilheiro)
