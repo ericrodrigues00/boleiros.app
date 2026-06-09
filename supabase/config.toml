@@ -1,0 +1,25 @@
+project_id = "boleiros-app"
+
+[api]
+port = 54321
+
+[db]
+port = 54322
+
+[studio]
+port = 54323
+
+[functions.auth]
+verify_jwt = false
+
+[functions.pools]
+verify_jwt = false
+
+[functions.bets]
+verify_jwt = false
+
+[functions.admin]
+verify_jwt = false
+
+[functions.superadmin]
+verify_jwt = false
