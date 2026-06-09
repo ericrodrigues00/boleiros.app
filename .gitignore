@@ -4,6 +4,7 @@ dist
 .env.local
 .DS_Store
 *.log
+.cursor/
 
 # Supabase local metadata
 supabase/.temp/
