@@ -56,8 +56,18 @@ Deno.serve(async (req) => {
       type MemberPick = {
         memberId: string
         username: string
-        groupBets: { group: string; sortOrder: number; first: string; firstFlag: string; second: string; secondFlag: string }[]
-        bestThirds: { team: string; flag: string; group: string }[]
+        groupBets: {
+          group: string
+          groupId: string
+          sortOrder: number
+          first: string
+          firstId: string
+          firstFlag: string
+          second: string
+          secondId: string
+          secondFlag: string
+        }[]
+        bestThirds: { team: string; teamId: string; flag: string; group: string }[]
       }
 
       const picksMap = new Map<string, MemberPick>()
@@ -74,10 +84,13 @@ Deno.serve(async (req) => {
         const second = teamMap.get(bet.predicted_second)
         entry.groupBets.push({
           group: grp?.name ?? '?',
+          groupId: bet.group_id,
           sortOrder: grp?.sort_order ?? 0,
           first: first?.name ?? '?',
+          firstId: bet.predicted_first,
           firstFlag: first?.flag_code ?? '',
           second: second?.name ?? '?',
+          secondId: bet.predicted_second,
           secondFlag: second?.flag_code ?? '',
         })
       }
@@ -89,6 +102,7 @@ Deno.serve(async (req) => {
         const grp = team ? groupMap.get(team.group_id) : null
         entry.bestThirds.push({
           team: team?.name ?? '?',
+          teamId: bet.team_id,
           flag: team?.flag_code ?? '',
           group: grp?.name ?? '?',
         })
@@ -99,7 +113,16 @@ Deno.serve(async (req) => {
         entry.bestThirds.sort((a, b) => a.group.localeCompare(b.group))
       }
 
-      return json({ picks: Array.from(picksMap.values()) })
+      return json({
+        picks: Array.from(picksMap.values()),
+        groups: (groups ?? []).map((g) => ({ id: g.id, name: g.name, sort_order: g.sort_order })),
+        teams: (teams ?? []).map((t) => ({
+          id: t.id,
+          name: t.name,
+          flag_code: t.flag_code,
+          group_id: t.group_id,
+        })),
+      })
     }
 
     if (action === 'remove-member') {

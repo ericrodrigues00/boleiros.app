@@ -4,6 +4,10 @@ import { useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi'
 import { useAuthStore } from '../stores/auth'
 import PoolNav from '../components/PoolNav.vue'
+import AdminAnalysisPanel from '../components/AdminAnalysisPanel.vue'
+import BolaoShareCard from '../components/BolaoShareCard.vue'
+import { toFlagEmoji } from '../lib/flags'
+import type { AnalysisGroup, AnalysisPick, AnalysisTeam } from '../lib/groupAnalysis'
 import type { Member } from '../types'
 
 const route = useRoute()
@@ -15,23 +19,12 @@ const members = ref<Member[]>([])
 const loading = ref(true)
 const error = ref('')
 
-// ── picks ────────────────────────────────────────────────────────────────────
-type GroupBetRow = {
-  group: string
-  sortOrder: number
-  first: string
-  firstFlag: string
-  second: string
-  secondFlag: string
-}
-type MemberPick = {
-  memberId: string
-  username: string
-  groupBets: GroupBetRow[]
-  bestThirds: { team: string; flag: string; group: string }[]
-}
+const adminTab = ref<'members' | 'analysis' | 'share'>('members')
+const poolName = ref('')
 
-const picks = ref<MemberPick[]>([])
+const picks = ref<AnalysisPick[]>([])
+const groups = ref<AnalysisGroup[]>([])
+const teams = ref<AnalysisTeam[]>([])
 const picksLoading = ref(false)
 const picksError = ref('')
 const expandedMemberId = ref<string | null>(null)
@@ -40,8 +33,12 @@ const inviteUrl = `${window.location.origin}/b/${route.params.token}`
 
 onMounted(async () => {
   try {
-    const data = await api.admin.members(auth.token!)
-    members.value = data.members
+    const [membersData, poolData] = await Promise.all([
+      api.admin.members(auth.token!),
+      api.pools.detail(auth.token!).catch(() => null),
+    ])
+    members.value = membersData.members
+    poolName.value = poolData?.pool?.name ?? auth.member?.username ?? 'Bolão'
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Erro ao carregar'
   } finally {
@@ -56,6 +53,8 @@ async function loadPicks() {
   try {
     const data = await api.admin.memberPicks(auth.token!)
     picks.value = data.picks ?? []
+    groups.value = data.groups ?? []
+    teams.value = data.teams ?? []
   } catch (e) {
     picksError.value = e instanceof Error ? e.message : 'Erro ao carregar palpites'
   } finally {
@@ -67,12 +66,14 @@ function toggleMember(id: string) {
   expandedMemberId.value = expandedMemberId.value === id ? null : id
 }
 
-function picksFor(memberId: string): MemberPick | undefined {
+function picksFor(memberId: string): AnalysisPick | undefined {
   return picks.value.find((p) => p.memberId === memberId)
 }
 
-function thirdForGroup(pick: MemberPick, groupName: string): { team: string; flag: string } | null {
-  return pick.bestThirds.find((t) => t.group === groupName) ?? null
+function thirdForGroup(pick: AnalysisPick, groupName: string) {
+  const third = pick.bestThirds.find((t) => t.group === groupName)
+  if (!third) return null
+  return { team: third.team, flag: third.flag ?? '' }
 }
 
 async function removeMember(memberId: string) {
@@ -91,11 +92,6 @@ function copyLink() {
   navigator.clipboard.writeText(inviteUrl)
 }
 
-function flagEmoji(code: string): string {
-  if (!code || code.length !== 2) return '🏳'
-  return String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1e0 + c.charCodeAt(0) - 65))
-}
-
 function statusBadge(memberId: string): { label: string; cls: string } {
   const p = picksFor(memberId)
   if (!p) return { label: '—', cls: 'badge-locked' }
@@ -110,20 +106,53 @@ function statusBadge(memberId: string): { label: string; cls: string } {
   <div class="page">
     <PoolNav />
 
-    <h1 class="page-title">Admin do bolão</h1>
-    <p class="page-sub">Gerencie membros e compartilhe o convite</p>
+    <div class="admin-header">
+      <div>
+        <h1 class="page-title">Admin do bolão</h1>
+        <p class="page-sub">Gerencie membros, compartilhe o convite e analise os palpites</p>
+      </div>
+      <div class="admin-tabs">
+        <button class="admin-tab" :class="{ active: adminTab === 'members' }" @click="adminTab = 'members'">
+          Membros
+        </button>
+        <button class="admin-tab admin-tab--analysis" :class="{ active: adminTab === 'analysis' }" @click="adminTab = 'analysis'">
+          Análise de palpites
+        </button>
+        <button class="admin-tab admin-tab--share" :class="{ active: adminTab === 'share' }" @click="adminTab = 'share'">
+          Compartilhar
+        </button>
+      </div>
+    </div>
 
     <!-- invite link -->
-    <div class="card" style="margin-bottom:1.5rem">
+    <div v-if="adminTab === 'members'" class="card" style="margin-bottom:1.5rem">
       <p style="margin-bottom:0.75rem;color:var(--text-muted);font-size:0.9rem">Link de convite</p>
       <div class="invite-box" style="margin:0">{{ inviteUrl }}</div>
       <button class="btn btn-ghost" style="margin-top:0.75rem" @click="copyLink">Copiar link</button>
     </div>
 
-    <!-- members + picks -->
-    <div v-if="loading" style="color:var(--text-muted)">Carregando...</div>
+    <AdminAnalysisPanel
+      v-if="adminTab === 'analysis'"
+      :picks="picks"
+      :groups="groups"
+      :teams="teams"
+      :loading="picksLoading || loading"
+    />
 
-    <template v-else>
+    <BolaoShareCard
+      v-else-if="adminTab === 'share'"
+      :pool-name="poolName"
+      :members="members"
+      :picks="picks"
+      :groups="groups"
+      :teams="teams"
+      :loading="picksLoading || loading"
+    />
+
+    <!-- members + picks -->
+    <div v-else-if="loading" style="color:var(--text-muted)">Carregando...</div>
+
+    <template v-else-if="adminTab === 'members'">
       <div class="admin-members">
         <div
           v-for="m in members"
@@ -177,18 +206,18 @@ function statusBadge(memberId: string): { label: string; cls: string } {
                       <div class="picks-group-name">Grupo {{ gb.group }}</div>
                       <div class="picks-row">
                         <span class="picks-pos">1º</span>
-                        <span class="picks-flag">{{ flagEmoji(gb.firstFlag) }}</span>
+                        <span class="picks-flag">{{ toFlagEmoji(gb.firstFlag ?? '') }}</span>
                         <span class="picks-team">{{ gb.first }}</span>
                       </div>
                       <div class="picks-row">
                         <span class="picks-pos">2º</span>
-                        <span class="picks-flag">{{ flagEmoji(gb.secondFlag) }}</span>
+                        <span class="picks-flag">{{ toFlagEmoji(gb.secondFlag ?? '') }}</span>
                         <span class="picks-team">{{ gb.second }}</span>
                       </div>
                       <div class="picks-row picks-row--third">
                         <span class="picks-pos">3º</span>
                         <template v-if="thirdForGroup(picksFor(m.id)!, gb.group)">
-                          <span class="picks-flag">{{ flagEmoji(thirdForGroup(picksFor(m.id)!, gb.group)!.flag) }}</span>
+                          <span class="picks-flag">{{ toFlagEmoji(thirdForGroup(picksFor(m.id)!, gb.group)!.flag) }}</span>
                           <span class="picks-team">{{ thirdForGroup(picksFor(m.id)!, gb.group)!.team }}</span>
                         </template>
                         <span v-else style="color:var(--text-muted);font-size:0.78rem">—</span>
@@ -204,7 +233,7 @@ function statusBadge(memberId: string): { label: string; cls: string } {
                         :key="t.team"
                         class="picks-third-chip"
                       >
-                        {{ flagEmoji(t.flag) }} {{ t.team }}
+                        {{ toFlagEmoji(t.flag ?? '') }} {{ t.team }}
                       </span>
                       <span
                         v-for="i in Math.max(0, 8 - picksFor(m.id)!.bestThirds.length)"
@@ -227,6 +256,50 @@ function statusBadge(memberId: string): { label: string; cls: string } {
 </template>
 
 <style scoped>
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-tab {
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.admin-tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(200, 245, 66, 0.08);
+}
+
+.admin-tab--analysis.active {
+  background: linear-gradient(135deg, rgba(200, 245, 66, 0.2), rgba(232, 196, 104, 0.12));
+  color: var(--text);
+  border-color: var(--gold);
+}
+
+.admin-tab--share.active {
+  background: linear-gradient(135deg, rgba(232, 196, 104, 0.25), rgba(200, 245, 66, 0.12));
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
 /* ── member blocks ──────────────────────────────────────────────────────────── */
 .admin-members {
   display: flex;
