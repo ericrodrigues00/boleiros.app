@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import {
   averagePoolSimilarity,
+  computePlayerArchetypes,
   computePositionStats,
   computeThirdVotes,
   type AnalysisGroup,
@@ -57,16 +58,9 @@ const cardData = computed(() => {
     ? { player: topScorerEntry[0], count: topScorerEntry[1], pct: totalPpl > 0 ? Math.round((topScorerEntry[1] / totalPpl) * 100) : 0 }
     : null
 
-  const allPositionStats = [
-    ...computePositionStats(activePicks.value, props.teams, 'first'),
-    ...computePositionStats(activePicks.value, props.teams, 'second'),
-  ]
-  const rareEntry = allPositionStats.find((s) => s.count === 1)
-  const rarePick = rareEntry
-    ? { team: rareEntry.team, flag: rareEntry.flag, group: rareEntry.group, position: rareEntry.position, by: rareEntry.voters[0] }
-    : null
+  const { safePlayer, boldPlayer } = computePlayerArchetypes(activePicks.value)
 
-  return { poolName: props.poolName, totalPpl, completed, avgSim, topFirst, topThird, topScorer, rarePick }
+  return { poolName: props.poolName, totalPpl, completed, avgSim, topFirst, topThird, topScorer, safePlayer, boldPlayer }
 })
 
 // ── canvas drawing ────────────────────────────────────────────────────────────
@@ -285,29 +279,48 @@ async function draw(canvas: HTMLCanvasElement) {
     ctx.fillText('Aguardando palpites…', PAD + 28, B3Y + 110)
   }
 
-  // Block 4 – rarest pick
+  // Block 4 – safe vs bold players
   const B4Y = B3Y + B3H + GAP
   const B4H = 148
-  if (d.rarePick) {
-    drawStatBlock(ctx, PAD, B4Y, W - PAD * 2, B4H, 'rgba(255,255,255,0.07)', 'rgba(255,255,255,0.03)')
-    ctx.font = `500 22px "DM Sans",sans-serif`
-    ctx.fillStyle = 'rgba(255,255,255,0.4)'
-    ctx.fillText('🔥 Palpite mais ousado', PAD + 28, B4Y + 40)
-    const flag2 = toFlagEmoji(d.rarePick.flag)
-    ctx.font = emojiFont(42)
-    ctx.fillStyle = '#ffffff'
-    ctx.fillText(flag2, PAD + 28, B4Y + 104)
-    const flag2W = ctx.measureText(flag2).width
-    ctx.font = `600 42px "Syne",sans-serif`
-    ctx.fillStyle = '#ffffff'
-    ctx.fillText(
-      ` ${d.rarePick.team} — ${d.rarePick.position} Gr. ${d.rarePick.group}`,
-      PAD + 28 + flag2W,
-      B4Y + 104,
-    )
-    ctx.font = `400 20px "DM Sans",sans-serif`
+  const halfW = (W - PAD * 2 - GAP) / 2
+
+  drawStatBlock(ctx, PAD, B4Y, halfW, B4H, 'rgba(200,245,66,0.14)', 'rgba(200,245,66,0.04)')
+  ctx.font = `500 20px "DM Sans",sans-serif`
+  ctx.textAlign = 'left'
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'
+  ctx.fillText('Jogador mais seguro', PAD + 22, B4Y + 38)
+
+  if (d.safePlayer) {
+    ctx.font = `700 40px "Syne",sans-serif`
+    ctx.fillStyle = '#c8f542'
+    const safeLines = wrapText(ctx, d.safePlayer.username, halfW - 44).slice(0, 1)
+    ctx.fillText(safeLines[0], PAD + 22, B4Y + 96)
+    ctx.font = `400 18px "DM Sans",sans-serif`
+    ctx.fillStyle = 'rgba(255,255,255,0.44)'
+    ctx.fillText(`${d.safePlayer.avgSimilarityPct}% parecido com a galera`, PAD + 22, B4Y + 132)
+  } else {
+    ctx.font = `500 28px "Syne",sans-serif`
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    ctx.fillText('Aguardando…', PAD + 22, B4Y + 100)
+  }
+
+  const boldX = PAD + halfW + GAP
+  drawStatBlock(ctx, boldX, B4Y, halfW, B4H, 'rgba(232,196,104,0.18)', 'rgba(232,196,104,0.05)')
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'
+  ctx.fillText('Jogador mais ousado', boldX + 22, B4Y + 38)
+
+  if (d.boldPlayer) {
+    ctx.font = `700 40px "Syne",sans-serif`
     ctx.fillStyle = '#e8c468'
-    ctx.fillText(`Só ${d.rarePick.by} acredita nesse palpite`, PAD + 28, B4Y + 136)
+    const boldLines = wrapText(ctx, d.boldPlayer.username, halfW - 44).slice(0, 1)
+    ctx.fillText(boldLines[0], boldX + 22, B4Y + 96)
+    ctx.font = `400 18px "DM Sans",sans-serif`
+    ctx.fillStyle = 'rgba(255,255,255,0.44)'
+    ctx.fillText(`${d.boldPlayer.avgSimilarityPct}% parecido com a galera`, boldX + 22, B4Y + 132)
+  } else {
+    ctx.font = `500 28px "Syne",sans-serif`
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'
+    ctx.fillText('Aguardando…', boldX + 22, B4Y + 100)
   }
 
   // ── bottom bar ──

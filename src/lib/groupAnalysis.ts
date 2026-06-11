@@ -89,6 +89,18 @@ export type SimulationResult = {
   thirdHits: number
 }
 
+export type MemberSimilarityProfile = {
+  memberId: string
+  username: string
+  avgSimilarityPct: number
+  comparedWith: number
+}
+
+export type PlayerArchetypes = {
+  safePlayer: MemberSimilarityProfile | null
+  boldPlayer: MemberSimilarityProfile | null
+}
+
 function teamMeta(teamId: string, teams: AnalysisTeam[]) {
   const team = teams.find((t) => t.id === teamId)
   return {
@@ -121,6 +133,43 @@ export function memberSimilarity(a: AnalysisPick, b: AnalysisPick): { pct: numbe
 
   if (total === 0) return { pct: 0, matching: 0, total: 0 }
   return { pct: Math.round((matching / total) * 100), matching, total }
+}
+
+export function computeMemberSimilarityProfiles(picks: AnalysisPick[]): MemberSimilarityProfile[] {
+  const active = picks.filter((p) => p.groupBets.length > 0)
+  if (active.length < 2) return []
+
+  return active.map((pick) => {
+    let sum = 0
+    let count = 0
+    for (const other of active) {
+      if (other.memberId === pick.memberId) continue
+      const { pct } = memberSimilarity(pick, other)
+      sum += pct
+      count++
+    }
+    return {
+      memberId: pick.memberId,
+      username: pick.username,
+      avgSimilarityPct: count > 0 ? Math.round(sum / count) : 0,
+      comparedWith: count,
+    }
+  })
+}
+
+export function computePlayerArchetypes(picks: AnalysisPick[]): PlayerArchetypes {
+  const profiles = computeMemberSimilarityProfiles(picks)
+  if (profiles.length === 0) return { safePlayer: null, boldPlayer: null }
+
+  const sorted = [...profiles].sort((a, b) => b.avgSimilarityPct - a.avgSimilarityPct)
+  const safePlayer = sorted[0]
+  const boldPlayer = sorted.length > 1 ? sorted[sorted.length - 1] : null
+
+  if (boldPlayer && safePlayer.memberId === boldPlayer.memberId) {
+    return { safePlayer, boldPlayer: null }
+  }
+
+  return { safePlayer, boldPlayer }
 }
 
 export function computePairSimilarities(picks: AnalysisPick[]): PairSimilarity[] {

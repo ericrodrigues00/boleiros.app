@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   averagePoolSimilarity,
   computeGroupConsensus,
+  computeMemberSimilarityProfiles,
+  computePlayerArchetypes,
   computePositionStats,
   memberSimilarity,
   simulateGroupStagePoints,
@@ -69,6 +71,52 @@ describe('computePositionStats', () => {
     const stats = computePositionStats(picks, teams, 'first')
     expect(stats[0].team).toBe('Brasil')
     expect(stats[0].count).toBe(2)
+  })
+})
+
+const picksWithOutlier: AnalysisPick[] = [
+  ...picks,
+  {
+    memberId: '3',
+    username: 'charlie',
+    groupBets: [
+      { group: 'C', groupId: 'g-c', sortOrder: 3, firstId: 'ma', secondId: 'br', first: 'Marrocos', second: 'Brasil' },
+      { group: 'J', groupId: 'g-j', sortOrder: 10, firstId: 'fr', secondId: 'ar', first: 'França', second: 'Argentina' },
+    ],
+    bestThirds: [{ teamId: 'ar', team: 'Argentina', group: 'J' }],
+  },
+]
+
+describe('computeMemberSimilarityProfiles', () => {
+  it('returns empty when fewer than 2 active picks', () => {
+    expect(computeMemberSimilarityProfiles([picks[0]])).toEqual([])
+    expect(computeMemberSimilarityProfiles([])).toEqual([])
+  })
+
+  it('computes average similarity per member', () => {
+    const profiles = computeMemberSimilarityProfiles(picksWithOutlier)
+    expect(profiles.length).toBe(3)
+    expect(profiles.every((p) => p.comparedWith === 2)).toBe(true)
+    const charlie = profiles.find((p) => p.username === 'charlie')
+    expect(charlie?.avgSimilarityPct).toBeLessThan(
+      profiles.find((p) => p.username === 'alice')!.avgSimilarityPct,
+    )
+  })
+})
+
+describe('computePlayerArchetypes', () => {
+  it('identifies safest and boldest players', () => {
+    const { safePlayer, boldPlayer } = computePlayerArchetypes(picksWithOutlier)
+    expect(safePlayer).not.toBeNull()
+    expect(boldPlayer).not.toBeNull()
+    expect(boldPlayer!.username).toBe('charlie')
+    expect(safePlayer!.avgSimilarityPct).toBeGreaterThan(boldPlayer!.avgSimilarityPct)
+  })
+
+  it('returns null archetypes with only one participant', () => {
+    const { safePlayer, boldPlayer } = computePlayerArchetypes([picks[0]])
+    expect(safePlayer).toBeNull()
+    expect(boldPlayer).toBeNull()
   })
 })
 
