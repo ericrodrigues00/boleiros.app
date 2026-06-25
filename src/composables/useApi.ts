@@ -60,12 +60,15 @@ export function useApi() {
       saveMatch: (token: string, payload: Record<string, unknown>) =>
         callFunction('bets', { body: { action: 'save-match', ...payload }, token }),
       ranking: (token: string) => callFunction('bets', { body: { action: 'ranking' }, token }),
+      poolPicks: (token: string) => callFunction('bets', { body: { action: 'pool-picks' }, token }),
     },
     admin: {
       members: (token: string) => callFunction('admin', { body: { action: 'members' }, token }),
       memberPicks: (token: string) => callFunction('admin', { body: { action: 'member-picks' }, token }),
       removeMember: (token: string, memberId: string) =>
         callFunction('admin', { body: { action: 'remove-member', memberId }, token }),
+      resetMemberPassword: (token: string, memberId: string, newPassword: string) =>
+        callFunction('admin', { body: { action: 'reset-member-password', memberId, newPassword }, token }),
     },
     superadmin: {
       login: (password: string) => callFunction('superadmin', { body: { action: 'login', password } }),

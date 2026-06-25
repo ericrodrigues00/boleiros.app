@@ -6,8 +6,9 @@ import { useAuthStore } from '../stores/auth'
 import PoolNav from '../components/PoolNav.vue'
 import AdminAnalysisPanel from '../components/AdminAnalysisPanel.vue'
 import BolaoShareCard from '../components/BolaoShareCard.vue'
-import { toFlagEmoji } from '../lib/flags'
+import MemberPickGrid from '../components/MemberPickGrid.vue'
 import type { AnalysisGroup, AnalysisPick, AnalysisTeam } from '../lib/groupAnalysis'
+import type { GroupResult } from '../lib/pickCorrectness'
 import type { Member } from '../types'
 
 const route = useRoute()
@@ -25,9 +26,14 @@ const poolName = ref('')
 const picks = ref<AnalysisPick[]>([])
 const groups = ref<AnalysisGroup[]>([])
 const teams = ref<AnalysisTeam[]>([])
+const groupResults = ref<GroupResult[]>([])
 const picksLoading = ref(false)
 const picksError = ref('')
 const expandedMemberId = ref<string | null>(null)
+const resettingMemberId = ref<string | null>(null)
+const resetPassword = ref('')
+const resetLoading = ref(false)
+const resetSuccess = ref('')
 
 const inviteUrl = `${window.location.origin}/b/${route.params.token}`
 
@@ -55,6 +61,7 @@ async function loadPicks() {
     picks.value = data.picks ?? []
     groups.value = data.groups ?? []
     teams.value = data.teams ?? []
+    groupResults.value = data.groupResults ?? []
   } catch (e) {
     picksError.value = e instanceof Error ? e.message : 'Erro ao carregar palpites'
   } finally {
@@ -68,12 +75,6 @@ function toggleMember(id: string) {
 
 function picksFor(memberId: string): AnalysisPick | undefined {
   return picks.value.find((p) => p.memberId === memberId)
-}
-
-function thirdForGroup(pick: AnalysisPick, groupName: string) {
-  const third = pick.bestThirds.find((t) => t.group === groupName)
-  if (!third) return null
-  return { team: third.team, flag: third.flag ?? '' }
 }
 
 async function removeMember(memberId: string) {
@@ -90,6 +91,33 @@ async function removeMember(memberId: string) {
 
 function copyLink() {
   navigator.clipboard.writeText(inviteUrl)
+}
+
+function openResetPassword(memberId: string) {
+  resettingMemberId.value = resettingMemberId.value === memberId ? null : memberId
+  resetPassword.value = ''
+  resetSuccess.value = ''
+  error.value = ''
+}
+
+async function submitResetPassword(memberId: string, username: string) {
+  if (resetPassword.value.length < 6) {
+    error.value = 'A senha deve ter pelo menos 6 caracteres'
+    return
+  }
+  resetLoading.value = true
+  error.value = ''
+  resetSuccess.value = ''
+  try {
+    await api.admin.resetMemberPassword(auth.token!, memberId, resetPassword.value)
+    resetSuccess.value = `Senha de ${username} redefinida. Avise o participante para entrar com a nova senha.`
+    resetPassword.value = ''
+    resettingMemberId.value = null
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Erro ao redefinir senha'
+  } finally {
+    resetLoading.value = false
+  }
 }
 
 function statusBadge(memberId: string): { label: string; cls: string } {
@@ -178,6 +206,13 @@ function statusBadge(memberId: string): { label: string; cls: string } {
                 {{ expandedMemberId === m.id ? 'Fechar' : 'Ver palpites' }}
               </button>
               <button
+                class="btn btn-ghost"
+                style="padding:0.3rem 0.7rem;font-size:0.8rem"
+                @click="openResetPassword(m.id)"
+              >
+                {{ resettingMemberId === m.id ? 'Cancelar' : 'Resetar senha' }}
+              </button>
+              <button
                 v-if="m.id !== auth.member?.id"
                 class="btn btn-ghost"
                 style="padding:0.3rem 0.7rem;font-size:0.8rem;color:var(--error,#f87171)"
@@ -188,6 +223,31 @@ function statusBadge(memberId: string): { label: string; cls: string } {
             </div>
           </div>
 
+          <Transition name="slide">
+            <div v-if="resettingMemberId === m.id" class="reset-panel" @click.stop>
+              <p class="reset-panel__title">Nova senha para <strong>{{ m.username }}</strong></p>
+              <p class="reset-panel__hint">Defina uma senha temporária e avise o participante. Mínimo 6 caracteres.</p>
+              <div class="reset-panel__form">
+                <input
+                  v-model="resetPassword"
+                  class="input"
+                  type="password"
+                  placeholder="Nova senha pessoal"
+                  minlength="6"
+                  @keyup.enter="submitResetPassword(m.id, m.username)"
+                />
+                <button
+                  class="btn btn-primary"
+                  style="white-space:nowrap"
+                  :disabled="resetLoading"
+                  @click="submitResetPassword(m.id, m.username)"
+                >
+                  {{ resetLoading ? 'Salvando…' : 'Salvar senha' }}
+                </button>
+              </div>
+            </div>
+          </Transition>
+
           <!-- expanded picks -->
           <Transition name="slide">
             <div v-if="expandedMemberId === m.id" class="picks-panel">
@@ -196,53 +256,11 @@ function statusBadge(memberId: string): { label: string; cls: string } {
                 <div v-if="!picksFor(m.id) || picksFor(m.id)!.groupBets.length === 0" class="picks-empty">
                   Nenhuma aposta salva ainda.
                 </div>
-                <template v-else>
-                  <div class="picks-grid">
-                    <div
-                      v-for="gb in picksFor(m.id)!.groupBets"
-                      :key="gb.group"
-                      class="picks-group-card"
-                    >
-                      <div class="picks-group-name">Grupo {{ gb.group }}</div>
-                      <div class="picks-row">
-                        <span class="picks-pos">1º</span>
-                        <span class="picks-flag">{{ toFlagEmoji(gb.firstFlag ?? '') }}</span>
-                        <span class="picks-team">{{ gb.first }}</span>
-                      </div>
-                      <div class="picks-row">
-                        <span class="picks-pos">2º</span>
-                        <span class="picks-flag">{{ toFlagEmoji(gb.secondFlag ?? '') }}</span>
-                        <span class="picks-team">{{ gb.second }}</span>
-                      </div>
-                      <div class="picks-row picks-row--third">
-                        <span class="picks-pos">3º</span>
-                        <template v-if="thirdForGroup(picksFor(m.id)!, gb.group)">
-                          <span class="picks-flag">{{ toFlagEmoji(thirdForGroup(picksFor(m.id)!, gb.group)!.flag) }}</span>
-                          <span class="picks-team">{{ thirdForGroup(picksFor(m.id)!, gb.group)!.team }}</span>
-                        </template>
-                        <span v-else style="color:var(--text-muted);font-size:0.78rem">—</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="picks-thirds-section">
-                    <p class="picks-thirds-title">8 melhores terceiros</p>
-                    <div class="picks-thirds-list">
-                      <span
-                        v-for="t in picksFor(m.id)!.bestThirds"
-                        :key="t.team"
-                        class="picks-third-chip"
-                      >
-                        {{ toFlagEmoji(t.flag ?? '') }} {{ t.team }}
-                      </span>
-                      <span
-                        v-for="i in Math.max(0, 8 - picksFor(m.id)!.bestThirds.length)"
-                        :key="'empty-' + i"
-                        class="picks-third-chip picks-third-chip--empty"
-                      >—</span>
-                    </div>
-                  </div>
-                </template>
+                <MemberPickGrid
+                  v-else
+                  :pick="picksFor(m.id)!"
+                  :group-results="groupResults"
+                />
               </template>
             </div>
           </Transition>
@@ -250,6 +268,7 @@ function statusBadge(memberId: string): { label: string; cls: string } {
       </div>
 
       <p v-if="error" class="error-msg">{{ error }}</p>
+      <p v-if="resetSuccess" class="success-msg">{{ resetSuccess }}</p>
       <p v-if="picksError" class="error-msg">{{ picksError }}</p>
     </template>
   </div>
@@ -349,6 +368,35 @@ function statusBadge(memberId: string): { label: string; cls: string } {
   display: flex;
   gap: 0.4rem;
   flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.reset-panel {
+  border-top: 1px solid var(--border, #2a2a2a);
+  padding: 1rem;
+  background: rgba(200, 245, 66, 0.04);
+}
+
+.reset-panel__title {
+  font-size: 0.9rem;
+  margin-bottom: 0.35rem;
+}
+
+.reset-panel__hint {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  margin-bottom: 0.75rem;
+}
+
+.reset-panel__form {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.reset-panel__form .input {
+  flex: 1;
+  min-width: 180px;
 }
 
 /* ── picks panel ──────────────────────────────────────────────────────────── */

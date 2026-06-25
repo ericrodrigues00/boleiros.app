@@ -15,6 +15,7 @@ const links = computed(() => {
     { to: base, label: 'Início', exact: true },
     { to: `${base}/grupos`, label: 'Grupos' },
     { to: `${base}/partidas`, label: 'Partidas' },
+    { to: `${base}/palpites`, label: 'Palpites' },
     { to: `${base}/ranking`, label: 'Ranking' },
   ]
   if (auth.isAdmin) items.push({ to: `${base}/admin`, label: 'Admin' })

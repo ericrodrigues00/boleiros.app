@@ -7,6 +7,7 @@ import {
   getGroupStageDeadline,
   BEST_THIRD_POINTS,
 } from '../_shared/scoring.ts'
+import { fetchPoolMemberPicks } from '../_shared/poolPicks.ts'
 
 const MAX_BEST_THIRDS = 8
 
@@ -173,6 +174,11 @@ Deno.serve(async (req) => {
 
       if (predError) return error(predError.message, 500)
       return json({ prediction })
+    }
+
+    if (action === 'pool-picks') {
+      const data = await fetchPoolMemberPicks(supabase, auth.poolId)
+      return json(data)
     }
 
     if (action === 'ranking') {

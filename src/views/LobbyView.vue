@@ -85,6 +85,7 @@ const inviteUrl = computed(() => `${window.location.origin}/b/${token.value}`)
       <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
         <router-link :to="`/b/${token}/grupos`" class="btn btn-primary">Apostar nos grupos</router-link>
         <router-link :to="`/b/${token}/partidas`" class="btn btn-ghost">Mata-mata</router-link>
+        <router-link :to="`/b/${token}/palpites`" class="btn btn-ghost">Palpites</router-link>
         <router-link :to="`/b/${token}/ranking`" class="btn btn-ghost">Ranking</router-link>
       </div>
     </template>

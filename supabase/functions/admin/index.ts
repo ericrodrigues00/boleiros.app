@@ -1,6 +1,8 @@
 import { handleCors, json, error } from '../_shared/cors.ts'
+import { hashPassword } from '../_shared/crypto.ts'
 import { getServiceClient } from '../_shared/supabase.ts'
 import { getMember } from '../_shared/auth.ts'
+import { fetchPoolMemberPicks } from '../_shared/poolPicks.ts'
 
 Deno.serve(async (req) => {
   const cors = handleCors(req)
@@ -27,102 +29,8 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'member-picks') {
-      const { data: members } = await supabase
-        .from('pool_members')
-        .select('id, username')
-        .eq('pool_id', auth.poolId)
-
-      if (!members || members.length === 0) return json({ picks: [] })
-
-      const memberIds = members.map((m) => m.id)
-
-      const [{ data: groupBets }, { data: thirdBets }, { data: teams }, { data: groups }] =
-        await Promise.all([
-          supabase
-            .from('group_bets')
-            .select('member_id, group_id, predicted_first, predicted_second')
-            .in('member_id', memberIds),
-          supabase
-            .from('best_third_bets')
-            .select('member_id, team_id')
-            .in('member_id', memberIds),
-          supabase.from('teams').select('id, name, flag_code, group_id'),
-          supabase.from('wc_groups').select('id, name, sort_order').order('sort_order'),
-        ])
-
-      const teamMap = new Map((teams ?? []).map((t) => [t.id, t]))
-      const groupMap = new Map((groups ?? []).map((g) => [g.id, g]))
-
-      type MemberPick = {
-        memberId: string
-        username: string
-        groupBets: {
-          group: string
-          groupId: string
-          sortOrder: number
-          first: string
-          firstId: string
-          firstFlag: string
-          second: string
-          secondId: string
-          secondFlag: string
-        }[]
-        bestThirds: { team: string; teamId: string; flag: string; group: string }[]
-      }
-
-      const picksMap = new Map<string, MemberPick>()
-
-      for (const m of members) {
-        picksMap.set(m.id, { memberId: m.id, username: m.username, groupBets: [], bestThirds: [] })
-      }
-
-      for (const bet of groupBets ?? []) {
-        const entry = picksMap.get(bet.member_id)
-        if (!entry) continue
-        const grp = groupMap.get(bet.group_id)
-        const first = teamMap.get(bet.predicted_first)
-        const second = teamMap.get(bet.predicted_second)
-        entry.groupBets.push({
-          group: grp?.name ?? '?',
-          groupId: bet.group_id,
-          sortOrder: grp?.sort_order ?? 0,
-          first: first?.name ?? '?',
-          firstId: bet.predicted_first,
-          firstFlag: first?.flag_code ?? '',
-          second: second?.name ?? '?',
-          secondId: bet.predicted_second,
-          secondFlag: second?.flag_code ?? '',
-        })
-      }
-
-      for (const bet of thirdBets ?? []) {
-        const entry = picksMap.get(bet.member_id)
-        if (!entry) continue
-        const team = teamMap.get(bet.team_id)
-        const grp = team ? groupMap.get(team.group_id) : null
-        entry.bestThirds.push({
-          team: team?.name ?? '?',
-          teamId: bet.team_id,
-          flag: team?.flag_code ?? '',
-          group: grp?.name ?? '?',
-        })
-      }
-
-      for (const entry of picksMap.values()) {
-        entry.groupBets.sort((a, b) => a.sortOrder - b.sortOrder)
-        entry.bestThirds.sort((a, b) => a.group.localeCompare(b.group))
-      }
-
-      return json({
-        picks: Array.from(picksMap.values()),
-        groups: (groups ?? []).map((g) => ({ id: g.id, name: g.name, sort_order: g.sort_order })),
-        teams: (teams ?? []).map((t) => ({
-          id: t.id,
-          name: t.name,
-          flag_code: t.flag_code,
-          group_id: t.group_id,
-        })),
-      })
+      const data = await fetchPoolMemberPicks(supabase, auth.poolId)
+      return json(data)
     }
 
     if (action === 'remove-member') {
@@ -146,6 +54,32 @@ Deno.serve(async (req) => {
 
       if (delError) return error(delError.message, 500)
       return json({ ok: true })
+    }
+
+    if (action === 'reset-member-password') {
+      const { memberId, newPassword } = body
+      if (!memberId) return error('memberId é obrigatório')
+      if (!newPassword || newPassword.length < 6) {
+        return error('Nova senha deve ter pelo menos 6 caracteres')
+      }
+
+      const { data: target } = await supabase
+        .from('pool_members')
+        .select('id, username')
+        .eq('id', memberId)
+        .eq('pool_id', auth.poolId)
+        .maybeSingle()
+
+      if (!target) return error('Membro não encontrado', 404)
+
+      const memberPasswordHash = await hashPassword(newPassword)
+      const { error: updateError } = await supabase
+        .from('pool_members')
+        .update({ member_password_hash: memberPasswordHash })
+        .eq('id', memberId)
+
+      if (updateError) return error(updateError.message, 500)
+      return json({ ok: true, username: target.username })
     }
 
     return error('Ação inválida', 400)

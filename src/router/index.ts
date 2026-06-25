@@ -31,6 +31,12 @@ const router = createRouter({
       meta: { poolRoute: true, requiresAuth: true },
     },
     {
+      path: '/b/:token/palpites',
+      name: 'pool-picks',
+      component: () => import('../views/PoolPicksView.vue'),
+      meta: { poolRoute: true, requiresAuth: true },
+    },
+    {
       path: '/b/:token/admin',
       name: 'pool-admin',
       component: () => import('../views/PoolAdminView.vue'),
