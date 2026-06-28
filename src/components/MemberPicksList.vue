@@ -88,7 +88,7 @@ function statusBadge(memberId: string): { label: string; cls: string } {
 
       <Transition name="slide">
         <div v-if="expandedMemberId === m.id" class="picks-panel">
-          <div v-if="hasKnockout" class="picks-tabs">
+          <div class="picks-tabs">
             <button
               class="picks-tab"
               :class="{ active: picksTab === 'groups' }"

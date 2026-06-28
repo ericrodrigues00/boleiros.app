@@ -19,6 +19,7 @@ const groupResults = ref<Record<string, { first: string; second: string; third: 
 const topScorer = ref('')
 const loading = ref(false)
 const message = ref('')
+const actionError = ref('')
 const resultInputs = ref<Record<string, { home: number; away: number }>>({})
 
 const newMatch = ref({
@@ -145,6 +146,7 @@ async function recalculate() {
 async function setLockMode(matchId: string, mode: 'auto' | 'locked' | 'unlocked') {
   if (!token.value) return
   message.value = ''
+  actionError.value = ''
   try {
     const payload =
       mode === 'locked'
@@ -157,7 +159,7 @@ async function setLockMode(matchId: string, mode: 'auto' | 'locked' | 'unlocked'
       mode === 'locked' ? 'Palpites bloqueados' : mode === 'unlocked' ? 'Palpites desbloqueados' : 'Modo automático restaurado'
     await loadAll()
   } catch (e) {
-    message.value = e instanceof Error ? e.message : 'Erro'
+    actionError.value = e instanceof Error ? e.message : 'Erro ao atualizar bloqueio'
   }
 }
 
@@ -165,12 +167,13 @@ async function deleteMatch(matchId: string) {
   if (!token.value) return
   if (!confirm('Excluir esta partida? Os palpites associados também serão removidos.')) return
   message.value = ''
+  actionError.value = ''
   try {
     await api.superadmin.deleteMatch(token.value, matchId)
     message.value = 'Partida excluída'
     await loadAll()
   } catch (e) {
-    message.value = e instanceof Error ? e.message : 'Erro'
+    actionError.value = e instanceof Error ? e.message : 'Erro ao excluir partida'
   }
 }
 
@@ -225,6 +228,7 @@ const knockoutMatches = computed(() => matches.value.filter((m) => m.stage !== '
       </div>
 
       <p v-if="message" class="success-msg" style="margin-bottom:1rem">{{ message }}</p>
+      <p v-if="actionError" class="error-msg" style="margin-bottom:1rem">{{ actionError }}</p>
 
       <!-- Matches tab -->
       <template v-if="tab === 'matches'">
@@ -326,16 +330,16 @@ const knockoutMatches = computed(() => matches.value.filter((m) => m.stage !== '
                 <button
                   class="btn btn-ghost"
                   style="padding:0.3rem 0.6rem;font-size:0.75rem"
-                  :disabled="match.locked_override && !match.unlocked_override"
-                  @click="setLockMode(match.id, 'locked')"
+                  :disabled="!!match.locked_override && !match.unlocked_override"
+                  @click.stop="setLockMode(match.id, 'locked')"
                 >
                   Bloquear
                 </button>
                 <button
                   class="btn btn-ghost"
                   style="padding:0.3rem 0.6rem;font-size:0.75rem"
-                  :disabled="match.unlocked_override"
-                  @click="setLockMode(match.id, 'unlocked')"
+                  :disabled="!!match.unlocked_override"
+                  @click.stop="setLockMode(match.id, 'unlocked')"
                 >
                   Desbloquear
                 </button>
@@ -343,14 +347,14 @@ const knockoutMatches = computed(() => matches.value.filter((m) => m.stage !== '
                   class="btn btn-ghost"
                   style="padding:0.3rem 0.6rem;font-size:0.75rem"
                   :disabled="!match.locked_override && !match.unlocked_override"
-                  @click="setLockMode(match.id, 'auto')"
+                  @click.stop="setLockMode(match.id, 'auto')"
                 >
                   Automático
                 </button>
                 <button
                   class="btn btn-ghost"
                   style="padding:0.3rem 0.6rem;font-size:0.75rem;color:var(--error,#f87171)"
-                  @click="deleteMatch(match.id)"
+                  @click.stop="deleteMatch(match.id)"
                 >
                   Excluir
                 </button>

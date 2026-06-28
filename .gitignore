@@ -8,3 +8,5 @@ dist
 
 # Supabase local metadata
 supabase/.temp/
+.vercel
+.env*
