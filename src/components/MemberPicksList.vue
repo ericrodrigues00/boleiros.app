@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import MemberPickGrid from './MemberPickGrid.vue'
+import MemberKnockoutPicks, { type KnockoutMatchInfo } from './MemberKnockoutPicks.vue'
 import { hasAnyGroupResults, type GroupResult } from '../lib/pickCorrectness'
 import type { AnalysisPick } from '../lib/groupAnalysis'
 
@@ -14,15 +15,19 @@ const props = defineProps<{
   members: MemberRow[]
   picks: AnalysisPick[]
   groupResults?: GroupResult[]
+  knockoutMatches?: KnockoutMatchInfo[]
   loading: boolean
   highlightMemberId?: string | null
 }>()
 
 const expandedMemberId = ref<string | null>(null)
+const picksTab = ref<'groups' | 'knockout'>('groups')
 const showCorrectness = computed(() => hasAnyGroupResults(props.groupResults ?? []))
+const hasKnockout = computed(() => (props.knockoutMatches?.length ?? 0) > 0)
 
 function toggleMember(id: string) {
   expandedMemberId.value = expandedMemberId.value === id ? null : id
+  if (expandedMemberId.value === id) picksTab.value = 'groups'
 }
 
 function picksFor(memberId: string): AnalysisPick | undefined {
@@ -32,9 +37,17 @@ function picksFor(memberId: string): AnalysisPick | undefined {
 function statusBadge(memberId: string): { label: string; cls: string } {
   const p = picksFor(memberId)
   if (!p) return { label: '—', cls: 'badge-locked' }
-  if (p.groupBets.length === 12 && p.bestThirds.length === 8) return { label: '✓ Completo', cls: 'badge-open' }
-  if (p.groupBets.length > 0 || p.bestThirds.length > 0)
-    return { label: `${p.groupBets.length}/12 grupos`, cls: 'badge-partial' }
+  const knockoutCount = p.matchPredictions?.length ?? 0
+  const groupComplete = p.groupBets.length === 12 && p.bestThirds.length === 8
+  if (groupComplete && (!hasKnockout.value || knockoutCount > 0)) {
+    return { label: '✓ Completo', cls: 'badge-open' }
+  }
+  if (p.groupBets.length > 0 || p.bestThirds.length > 0 || knockoutCount > 0) {
+    const parts = []
+    if (p.groupBets.length > 0) parts.push(`${p.groupBets.length}/12 grupos`)
+    if (knockoutCount > 0) parts.push(`${knockoutCount} mata-mata`)
+    return { label: parts.join(' · '), cls: 'badge-partial' }
+  }
   return { label: 'Sem apostas', cls: 'badge-locked' }
 }
 </script>
@@ -75,14 +88,40 @@ function statusBadge(memberId: string): { label: string; cls: string } {
 
       <Transition name="slide">
         <div v-if="expandedMemberId === m.id" class="picks-panel">
-          <div v-if="!picksFor(m.id) || picksFor(m.id)!.groupBets.length === 0" class="picks-empty">
-            Nenhuma aposta salva ainda.
+          <div v-if="hasKnockout" class="picks-tabs">
+            <button
+              class="picks-tab"
+              :class="{ active: picksTab === 'groups' }"
+              @click="picksTab = 'groups'"
+            >
+              Fase de grupos
+            </button>
+            <button
+              class="picks-tab"
+              :class="{ active: picksTab === 'knockout' }"
+              @click="picksTab = 'knockout'"
+            >
+              Mata-mata
+            </button>
           </div>
-          <MemberPickGrid
-            v-else
-            :pick="picksFor(m.id)!"
-            :group-results="groupResults"
-          />
+
+          <template v-if="picksTab === 'groups'">
+            <div v-if="!picksFor(m.id) || picksFor(m.id)!.groupBets.length === 0" class="picks-empty">
+              Nenhuma aposta salva na fase de grupos.
+            </div>
+            <MemberPickGrid
+              v-else
+              :pick="picksFor(m.id)!"
+              :group-results="groupResults"
+            />
+          </template>
+
+          <template v-else>
+            <MemberKnockoutPicks
+              :pick="picksFor(m.id) ?? { memberId: m.id, username: m.username, groupBets: [], bestThirds: [], matchPredictions: [] }"
+              :matches="knockoutMatches ?? []"
+            />
+          </template>
         </div>
       </Transition>
     </div>
@@ -165,6 +204,33 @@ function statusBadge(memberId: string): { label: string; cls: string } {
   color: var(--text-muted);
   font-size: 0.9rem;
   padding: 0.5rem 0;
+}
+
+.picks-tabs {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+}
+
+.picks-tab {
+  background: transparent;
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.picks-tab.active {
+  border-color: var(--accent, #a3e635);
+  color: var(--accent, #a3e635);
+}
+
+.picks-tab:hover:not(.active) {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text);
 }
 
 .badge-partial {

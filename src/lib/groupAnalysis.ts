@@ -15,6 +15,7 @@ export type AnalysisPick = {
     secondFlag?: string
   }[]
   bestThirds: { teamId: string; team: string; flag?: string; group: string }[]
+  matchPredictions?: { matchId: string; homeScore: number; awayScore: number }[]
 }
 
 export type AnalysisTeam = {

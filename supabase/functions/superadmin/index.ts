@@ -159,13 +159,14 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'update-match') {
-      const { matchId, kickoffAt, status, lockedOverride, homeTeamId, awayTeamId, homeLabel, awayLabel } = body
+      const { matchId, kickoffAt, status, lockedOverride, unlockedOverride, homeTeamId, awayTeamId, homeLabel, awayLabel } = body
       if (!matchId) return error('matchId é obrigatório')
 
       const updates: Record<string, unknown> = {}
       if (kickoffAt != null) updates.kickoff_at = kickoffAt
       if (status != null) updates.status = status
       if (lockedOverride != null) updates.locked_override = lockedOverride
+      if (unlockedOverride != null) updates.unlocked_override = unlockedOverride
       if (homeTeamId !== undefined) updates.home_team_id = homeTeamId
       if (awayTeamId !== undefined) updates.away_team_id = awayTeamId
       if (homeLabel !== undefined) updates.home_label = homeLabel
@@ -180,6 +181,24 @@ Deno.serve(async (req) => {
 
       if (dbError) return error(dbError.message, 500)
       return json({ match })
+    }
+
+    if (action === 'delete-match') {
+      const { matchId } = body
+      if (!matchId) return error('matchId é obrigatório')
+
+      const { data: match, error: fetchError } = await supabase
+        .from('matches')
+        .select('stage')
+        .eq('id', matchId)
+        .single()
+
+      if (fetchError || !match) return error('Partida não encontrada', 404)
+      if (match.stage === 'group') return error('Não é possível excluir partidas da fase de grupos', 400)
+
+      const { error: dbError } = await supabase.from('matches').delete().eq('id', matchId)
+      if (dbError) return error(dbError.message, 500)
+      return json({ ok: true })
     }
 
     if (action === 'match-result') {

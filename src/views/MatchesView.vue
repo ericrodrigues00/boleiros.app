@@ -18,6 +18,7 @@ const saving = ref<string | null>(null)
 const error = ref('')
 
 const stageLabels: Record<string, string> = {
+  round_32: '16 avos',
   round_16: 'Oitavas',
   quarter: 'Quartas',
   semi: 'Semifinal',

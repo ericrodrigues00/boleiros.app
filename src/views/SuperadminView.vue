@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useApi } from '../composables/useApi'
+import { isMatchLocked } from '../lib/scoring'
 import type { Match, Team, WcGroup } from '../types'
 
 const api = useApi()
@@ -25,7 +26,7 @@ const newMatch = ref({
   awayTeamId: '',
   homeLabel: '',
   awayLabel: '',
-  stage: 'round_16',
+  stage: 'round_32',
   kickoffAt: '',
 })
 
@@ -141,18 +142,60 @@ async function recalculate() {
   }
 }
 
+async function setLockMode(matchId: string, mode: 'auto' | 'locked' | 'unlocked') {
+  if (!token.value) return
+  message.value = ''
+  try {
+    const payload =
+      mode === 'locked'
+        ? { matchId, lockedOverride: true, unlockedOverride: false }
+        : mode === 'unlocked'
+          ? { matchId, lockedOverride: false, unlockedOverride: true }
+          : { matchId, lockedOverride: false, unlockedOverride: false }
+    await api.superadmin.updateMatch(token.value, payload)
+    message.value =
+      mode === 'locked' ? 'Palpites bloqueados' : mode === 'unlocked' ? 'Palpites desbloqueados' : 'Modo automático restaurado'
+    await loadAll()
+  } catch (e) {
+    message.value = e instanceof Error ? e.message : 'Erro'
+  }
+}
+
+async function deleteMatch(matchId: string) {
+  if (!token.value) return
+  if (!confirm('Excluir esta partida? Os palpites associados também serão removidos.')) return
+  message.value = ''
+  try {
+    await api.superadmin.deleteMatch(token.value, matchId)
+    message.value = 'Partida excluída'
+    await loadAll()
+  } catch (e) {
+    message.value = e instanceof Error ? e.message : 'Erro'
+  }
+}
+
+function lockStatusLabel(match: Match): string {
+  if (match.unlocked_override) return 'Desbloqueado (manual)'
+  if (match.locked_override) return 'Bloqueado (manual)'
+  if (match.status === 'finished' || match.status === 'live') return 'Bloqueado (jogo)'
+  return isMatchLocked(match) ? 'Bloqueado (automático)' : 'Aberto (automático)'
+}
+
 function teamsInGroup(groupId: string) {
   return teams.value.filter((t) => t.group_id === groupId)
 }
 
 const stageLabels: Record<string, string> = {
   group: 'Grupos',
+  round_32: '16 avos',
   round_16: 'Oitavas',
   quarter: 'Quartas',
   semi: 'Semi',
   third_place: '3º lugar',
   final: 'Final',
 }
+
+const knockoutMatches = computed(() => matches.value.filter((m) => m.stage !== 'group'))
 </script>
 
 <template>
@@ -213,6 +256,7 @@ const stageLabels: Record<string, string> = {
             <div class="field">
               <label class="label">Fase</label>
               <select v-model="newMatch.stage" class="input">
+                <option value="round_32">16 avos</option>
                 <option value="round_16">Oitavas</option>
                 <option value="quarter">Quartas</option>
                 <option value="semi">Semi</option>
@@ -229,7 +273,7 @@ const stageLabels: Record<string, string> = {
         </div>
 
         <div class="match-list">
-          <article v-for="match in matches" :key="match.id" class="match-card">
+          <article v-for="match in knockoutMatches" :key="match.id" class="match-card">
             <div>
               <span class="badge" style="margin-bottom:0.5rem;display:inline-block">{{ stageLabels[match.stage] ?? match.stage }}</span>
               <div class="match-card__teams">
@@ -238,41 +282,79 @@ const stageLabels: Record<string, string> = {
                 <span>{{ match.away_team?.name ?? match.away_label ?? 'TBD' }}</span>
               </div>
               <div class="match-card__meta">{{ new Date(match.kickoff_at).toLocaleString('pt-BR') }}</div>
+              <div class="match-card__meta" style="margin-top:0.25rem">
+                Palpites: {{ lockStatusLabel(match) }}
+              </div>
             </div>
-            <div class="score-inputs" v-if="match.status !== 'finished'">
-              <input
-                type="number"
-                class="score-input"
-                min="0"
-                placeholder="0"
-                :value="resultInputs[match.id]?.home ?? ''"
-                @input="(e) => {
-                  if (!resultInputs[match.id]) resultInputs[match.id] = { home: 0, away: 0 }
-                  resultInputs[match.id].home = Number((e.target as HTMLInputElement).value)
-                }"
-              />
-              <span>×</span>
-              <input
-                type="number"
-                class="score-input"
-                min="0"
-                placeholder="0"
-                :value="resultInputs[match.id]?.away ?? ''"
-                @input="(e) => {
-                  if (!resultInputs[match.id]) resultInputs[match.id] = { home: 0, away: 0 }
-                  resultInputs[match.id].away = Number((e.target as HTMLInputElement).value)
-                }"
-              />
-              <button
-                class="btn btn-primary"
-                style="padding:0.5rem 0.85rem;font-size:0.85rem"
-                @click="setResult(match.id, resultInputs[match.id]?.home ?? 0, resultInputs[match.id]?.away ?? 0)"
-              >
-                Resultado
-              </button>
-            </div>
-            <div v-else style="font-family:var(--font-display);font-weight:700;color:var(--gold)">
-              {{ match.home_score }} – {{ match.away_score }}
+            <div style="display:flex;flex-direction:column;gap:0.5rem;align-items:flex-end">
+              <div class="score-inputs" v-if="match.status !== 'finished'">
+                <input
+                  type="number"
+                  class="score-input"
+                  min="0"
+                  placeholder="0"
+                  :value="resultInputs[match.id]?.home ?? ''"
+                  @input="(e) => {
+                    if (!resultInputs[match.id]) resultInputs[match.id] = { home: 0, away: 0 }
+                    resultInputs[match.id].home = Number((e.target as HTMLInputElement).value)
+                  }"
+                />
+                <span>×</span>
+                <input
+                  type="number"
+                  class="score-input"
+                  min="0"
+                  placeholder="0"
+                  :value="resultInputs[match.id]?.away ?? ''"
+                  @input="(e) => {
+                    if (!resultInputs[match.id]) resultInputs[match.id] = { home: 0, away: 0 }
+                    resultInputs[match.id].away = Number((e.target as HTMLInputElement).value)
+                  }"
+                />
+                <button
+                  class="btn btn-primary"
+                  style="padding:0.5rem 0.85rem;font-size:0.85rem"
+                  @click="setResult(match.id, resultInputs[match.id]?.home ?? 0, resultInputs[match.id]?.away ?? 0)"
+                >
+                  Resultado
+                </button>
+              </div>
+              <div v-else style="font-family:var(--font-display);font-weight:700;color:var(--gold)">
+                {{ match.home_score }} – {{ match.away_score }}
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:0.35rem;justify-content:flex-end">
+                <button
+                  class="btn btn-ghost"
+                  style="padding:0.3rem 0.6rem;font-size:0.75rem"
+                  :disabled="match.locked_override && !match.unlocked_override"
+                  @click="setLockMode(match.id, 'locked')"
+                >
+                  Bloquear
+                </button>
+                <button
+                  class="btn btn-ghost"
+                  style="padding:0.3rem 0.6rem;font-size:0.75rem"
+                  :disabled="match.unlocked_override"
+                  @click="setLockMode(match.id, 'unlocked')"
+                >
+                  Desbloquear
+                </button>
+                <button
+                  class="btn btn-ghost"
+                  style="padding:0.3rem 0.6rem;font-size:0.75rem"
+                  :disabled="!match.locked_override && !match.unlocked_override"
+                  @click="setLockMode(match.id, 'auto')"
+                >
+                  Automático
+                </button>
+                <button
+                  class="btn btn-ghost"
+                  style="padding:0.3rem 0.6rem;font-size:0.75rem;color:var(--error,#f87171)"
+                  @click="deleteMatch(match.id)"
+                >
+                  Excluir
+                </button>
+              </div>
             </div>
           </article>
         </div>

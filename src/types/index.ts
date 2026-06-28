@@ -57,6 +57,7 @@ export interface Match {
   away_score: number | null
   status: 'scheduled' | 'live' | 'finished'
   locked_override: boolean
+  unlocked_override?: boolean
   locked?: boolean
   home_team?: Team | null
   away_team?: Team | null

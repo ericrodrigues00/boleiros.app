@@ -32,6 +32,20 @@ describe('isMatchLocked', () => {
     const future = new Date(Date.now() + 5 * 60 * 1000).toISOString()
     expect(isMatchLocked({ kickoff_at: future, locked_override: false, status: 'scheduled' })).toBe(true)
   })
+
+  it('unlocks when unlocked_override is set', () => {
+    const past = new Date(Date.now() - 60 * 1000).toISOString()
+    expect(
+      isMatchLocked({ kickoff_at: past, locked_override: false, unlocked_override: true, status: 'scheduled' }),
+    ).toBe(false)
+  })
+
+  it('locks when locked_override is set', () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    expect(
+      isMatchLocked({ kickoff_at: future, locked_override: true, unlocked_override: false, status: 'scheduled' }),
+    ).toBe(true)
+  })
 })
 
 describe('sortRankings', () => {

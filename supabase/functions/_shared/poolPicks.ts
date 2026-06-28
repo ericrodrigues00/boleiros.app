@@ -2,6 +2,37 @@ import type { getServiceClient } from './supabase.ts'
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
 
+const STAGE_ORDER: Record<string, number> = {
+  round_32: 1,
+  round_16: 2,
+  quarter: 3,
+  semi: 4,
+  third_place: 5,
+  final: 6,
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  round_32: '16 avos',
+  round_16: 'Oitavas',
+  quarter: 'Quartas',
+  semi: 'Semi',
+  third_place: '3º lugar',
+  final: 'Final',
+}
+
+export type KnockoutMatchInfo = {
+  id: string
+  stage: string
+  stageLabel: string
+  stageOrder: number
+  kickoffAt: string
+  home: string
+  away: string
+  homeScore: number | null
+  awayScore: number | null
+  status: string
+}
+
 export async function fetchPoolMemberPicks(supabase: SupabaseClient, poolId: string) {
   const { data: members } = await supabase
     .from('pool_members')
@@ -10,13 +41,20 @@ export async function fetchPoolMemberPicks(supabase: SupabaseClient, poolId: str
     .order('joined_at')
 
   if (!members || members.length === 0) {
-    return { picks: [], groups: [], teams: [], members: [], groupResults: [] }
+    return { picks: [], groups: [], teams: [], members: [], groupResults: [], knockoutMatches: [] }
   }
 
   const memberIds = members.map((m) => m.id)
 
-  const [{ data: groupBets }, { data: thirdBets }, { data: teams }, { data: groups }, { data: groupResults }] =
-    await Promise.all([
+  const [
+    { data: groupBets },
+    { data: thirdBets },
+    { data: teams },
+    { data: groups },
+    { data: groupResults },
+    { data: knockoutMatchesRaw },
+    { data: matchPredictions },
+  ] = await Promise.all([
       supabase
         .from('group_bets')
         .select('member_id, group_id, predicted_first, predicted_second')
@@ -30,6 +68,11 @@ export async function fetchPoolMemberPicks(supabase: SupabaseClient, poolId: str
       supabase
         .from('group_results')
         .select('group_id, first_team_id, second_team_id, third_team_id, advancing_as_third'),
+      supabase.from('matches').select('*').neq('stage', 'group').order('kickoff_at'),
+      supabase
+        .from('match_predictions')
+        .select('member_id, match_id, home_score, away_score')
+        .in('member_id', memberIds),
     ])
 
   const teamMap = new Map((teams ?? []).map((t) => [t.id, t]))
@@ -50,12 +93,50 @@ export async function fetchPoolMemberPicks(supabase: SupabaseClient, poolId: str
       secondFlag: string
     }[]
     bestThirds: { team: string; teamId: string; flag: string; group: string }[]
+    matchPredictions: { matchId: string; homeScore: number; awayScore: number }[]
+  }
+
+  const knockoutMatches: KnockoutMatchInfo[] = (knockoutMatchesRaw ?? [])
+    .map((match) => ({
+      id: match.id,
+      stage: match.stage,
+      stageLabel: STAGE_LABELS[match.stage] ?? match.stage,
+      stageOrder: STAGE_ORDER[match.stage] ?? 99,
+      kickoffAt: match.kickoff_at,
+      home: match.home_team_id
+        ? (teamMap.get(match.home_team_id)?.name ?? '?')
+        : (match.home_label ?? 'TBD'),
+      away: match.away_team_id
+        ? (teamMap.get(match.away_team_id)?.name ?? '?')
+        : (match.away_label ?? 'TBD'),
+      homeScore: match.home_score,
+      awayScore: match.away_score,
+      status: match.status,
+    }))
+    .sort((a, b) => a.stageOrder - b.stageOrder || a.kickoffAt.localeCompare(b.kickoffAt))
+
+  const predictionsByMember = new Map<string, { matchId: string; homeScore: number; awayScore: number }[]>()
+  for (const pred of matchPredictions ?? []) {
+    if (!predictionsByMember.has(pred.member_id)) {
+      predictionsByMember.set(pred.member_id, [])
+    }
+    predictionsByMember.get(pred.member_id)!.push({
+      matchId: pred.match_id,
+      homeScore: pred.home_score,
+      awayScore: pred.away_score,
+    })
   }
 
   const picksMap = new Map<string, MemberPick>()
 
   for (const m of members) {
-    picksMap.set(m.id, { memberId: m.id, username: m.username, groupBets: [], bestThirds: [] })
+    picksMap.set(m.id, {
+      memberId: m.id,
+      username: m.username,
+      groupBets: [],
+      bestThirds: [],
+      matchPredictions: predictionsByMember.get(m.id) ?? [],
+    })
   }
 
   for (const bet of groupBets ?? []) {
@@ -116,5 +197,6 @@ export async function fetchPoolMemberPicks(supabase: SupabaseClient, poolId: str
       thirdTeamId: r.third_team_id,
       advancingAsThird: r.advancing_as_third,
     })),
+    knockoutMatches,
   }
 }

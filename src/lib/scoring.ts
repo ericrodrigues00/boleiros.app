@@ -41,10 +41,12 @@ export function calculateGroupBetPoints(
 export function isMatchLocked(match: {
   kickoff_at: string
   locked_override: boolean
+  unlocked_override?: boolean
   status: string
 }): boolean {
-  if (match.locked_override) return true
   if (match.status === 'finished' || match.status === 'live') return true
+  if (match.unlocked_override) return false
+  if (match.locked_override) return true
   const lockTime = new Date(match.kickoff_at).getTime() - PREDICTION_LOCK_MINUTES * 60 * 1000
   return Date.now() >= lockTime
 }

@@ -77,6 +77,10 @@ export function useApi() {
       groupResults: (token: string) => callFunction('superadmin', { body: { action: 'group-results' }, superadminToken: token }),
       createMatch: (token: string, payload: Record<string, unknown>) =>
         callFunction('superadmin', { body: { action: 'create-match', ...payload }, superadminToken: token }),
+      updateMatch: (token: string, payload: Record<string, unknown>) =>
+        callFunction('superadmin', { body: { action: 'update-match', ...payload }, superadminToken: token }),
+      deleteMatch: (token: string, matchId: string) =>
+        callFunction('superadmin', { body: { action: 'delete-match', matchId }, superadminToken: token }),
       matchResult: (token: string, payload: Record<string, unknown>) =>
         callFunction('superadmin', { body: { action: 'match-result', ...payload }, superadminToken: token }),
       confirmGroup: (token: string, payload: Record<string, unknown>) =>
