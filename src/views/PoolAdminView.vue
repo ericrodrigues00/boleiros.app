@@ -9,6 +9,7 @@ import BolaoShareCard from '../components/BolaoShareCard.vue'
 import MemberPickGrid from '../components/MemberPickGrid.vue'
 import type { AnalysisGroup, AnalysisPick, AnalysisTeam } from '../lib/groupAnalysis'
 import type { GroupResult } from '../lib/pickCorrectness'
+import type { KnockoutMatchInfo } from '../components/MemberKnockoutPicks.vue'
 import type { Member } from '../types'
 
 const route = useRoute()
@@ -27,6 +28,7 @@ const picks = ref<AnalysisPick[]>([])
 const groups = ref<AnalysisGroup[]>([])
 const teams = ref<AnalysisTeam[]>([])
 const groupResults = ref<GroupResult[]>([])
+const knockoutMatches = ref<KnockoutMatchInfo[]>([])
 const picksLoading = ref(false)
 const picksError = ref('')
 const expandedMemberId = ref<string | null>(null)
@@ -62,6 +64,7 @@ async function loadPicks() {
     groups.value = data.groups ?? []
     teams.value = data.teams ?? []
     groupResults.value = data.groupResults ?? []
+    knockoutMatches.value = data.knockoutMatches ?? []
   } catch (e) {
     picksError.value = e instanceof Error ? e.message : 'Erro ao carregar palpites'
   } finally {
@@ -164,6 +167,8 @@ function statusBadge(memberId: string): { label: string; cls: string } {
       :picks="picks"
       :groups="groups"
       :teams="teams"
+      :knockout-matches="knockoutMatches"
+      :pool-name="poolName"
       :loading="picksLoading || loading"
     />
 

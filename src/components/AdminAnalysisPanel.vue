@@ -18,15 +18,21 @@ import {
   type SimulationScenario,
 } from '../lib/groupAnalysis'
 import { toFlagEmoji } from '../lib/flags'
+import KnockoutDailyRewind from './KnockoutDailyRewind.vue'
+import type { KnockoutMatchInfo } from './MemberKnockoutPicks.vue'
 
 const props = defineProps<{
   picks: AnalysisPick[]
   groups: AnalysisGroup[]
   teams: AnalysisTeam[]
   loading: boolean
+  knockoutMatches?: KnockoutMatchInfo[]
+  poolName?: string
 }>()
 
-const analysisSection = ref<'overview' | 'groups' | 'matrix' | 'simulate'>('overview')
+const analysisSection = ref<'rewind' | 'overview' | 'groups' | 'matrix' | 'simulate'>(
+  (props.knockoutMatches?.length ?? 0) > 0 ? 'rewind' : 'overview',
+)
 const scenario = ref<SimulationScenario>({})
 const showRareOnly = ref(false)
 
@@ -136,7 +142,7 @@ watch(
   <div class="analysis">
     <div v-if="loading" class="analysis-loading">Carregando dados para análise...</div>
 
-    <template v-else-if="activePicks.length === 0">
+    <template v-else-if="activePicks.length === 0 && (knockoutMatches?.length ?? 0) === 0">
       <div class="card analysis-empty">
         <h2>Sem palpites para analisar</h2>
         <p>Assim que os participantes salvarem apostas na fase de grupos, os gráficos e insights aparecem aqui.</p>
@@ -145,6 +151,14 @@ watch(
 
     <template v-else>
       <div class="analysis-nav">
+        <button
+          v-if="(knockoutMatches?.length ?? 0) > 0"
+          class="analysis-nav__btn analysis-nav__btn--rewind"
+          :class="{ active: analysisSection === 'rewind' }"
+          @click="analysisSection = 'rewind'"
+        >
+          Replay do dia
+        </button>
         <button class="analysis-nav__btn" :class="{ active: analysisSection === 'overview' }" @click="analysisSection = 'overview'">
           Visão geral
         </button>
@@ -162,6 +176,14 @@ watch(
           Simular cenário
         </button>
       </div>
+
+      <KnockoutDailyRewind
+        v-if="analysisSection === 'rewind'"
+        :pool-name="poolName ?? 'Bolão'"
+        :picks="picks"
+        :matches="knockoutMatches ?? []"
+        :loading="loading"
+      />
 
       <template v-if="analysisSection === 'overview'">
         <div class="stats-grid">
@@ -476,9 +498,10 @@ watch(
   background: rgba(200, 245, 66, 0.08);
 }
 
-.analysis-nav__btn--accent.active {
-  background: var(--accent);
-  color: var(--bg);
+.analysis-nav__btn--rewind.active {
+  background: linear-gradient(135deg, #a855f7, #ec4899);
+  color: white;
+  border-color: transparent;
 }
 
 .stats-grid {
